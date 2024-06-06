@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <style>
+        .container {
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+            height: 100%;
+        }
+        .row {
+            display: flex;
+            flex: 1;
+        }
+        .boxTop {
+            flex: 1;
+            aspect-ratio: 2 / 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .boxBot{
+            flex: 1;
+            aspect-ratio: 3 / 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding-top: .5rem;
+        }
+        #debuggerBox{
+            background-color: black;
+            color: white;
+            display: block;
+            overflow: hidden;
+        }
+        #output{
+            box-sizing: border-box;
+            height: 90%;
+            overflow-y: auto;
+            border-bottom: 1px solid white;
+            background-color: black;
+            padding: .5rem 1rem;
+        }
+        #input {
+            box-sizing: border-box;
+            height: 10%;
+            width: 100%;
+            padding: .5rem 1rem;
+            border: none;
+            background-color: black;
+            color: white;
+            outline: none;
+        }
+        canvas {
+            box-sizing: content-box;
+            outline: 1px solid black;
+            outline-offset: -1px;
+        }
+        table {
+            table-layout: fixed;
+            height: 100%;
+            width: 100%;
+        }
+        td {
+            text-align: center;
+            border: 1px solid black;
+            border-radius: 1rem;
+            font-size: xx-large;
+            padding-top: .5rem;
+            padding-bottom: .5rem;
+        }
+        #freeze {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: black;
+            opacity: .75;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            font-size: 4rem;
+        }
+        #dropZone {
+            width: 100%;
+            height: 100%;
+            border: .25rem dashed black;
+            border-radius: 1rem;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+    </style>
+</head>
+<body>
+    <div id="freeze">
+        <p id="freezeMessage" style="color: white;"></p>
+    </div>
+    <div class="Container">
+        <div class="row">
+            <div id="displayBox" class="boxTop" tabindex="0">
+                
+            </div>
+            <div id="debuggerBox" class="boxTop">
+                <div id="output"></div>
+                <input type="text" id="input" placeholder="Command line" autocomplete="off", tabindex="1">
+            </div>
+        </div>
+        <div class="row">
+            <div id="controlsBox" class="boxBot">
+                <table>
+                    <tbody>
+                        <tr>
+                            <td>1</td>
+                            <td>2</td>
+                            <td>3</td>
+                            <td>C</td>
+                        </tr>
+                        <tr>
+                            <td>4</td>
+                            <td>5</td>
+                            <td>6</td>
+                            <td>D</td>
+                        </tr>
+                        <tr>
+                            <td>7</td>
+                            <td>8</td>
+                            <td>9</td>
+                            <td>E</td>
+                        </tr>
+                        <tr>
+                            <td>A</td>
+                            <td>0</td>
+                            <td>B</td>
+                            <td>F</td>
+                        </tr>
+                    </tbody>
+                </table>
+                <p style="font-size: 4rem;"><=</p>
+                <table id="controlsTable">
+                    <tbody>
+                        <tr>
+                            <td id="1" onclick="assignControls(id)"></td>
+                            <td id="2" onclick="assignControls(id)"></td>
+                            <td id="3" onclick="assignControls(id)"></td>
+                            <td id="C" onclick="assignControls(id)"></td>
+                        </tr>
+                        <tr>
+                            <td id="4" onclick="assignControls(id)"></td>
+                            <td id="5" onclick="assignControls(id)"></td>
+                            <td id="6" onclick="assignControls(id)"></td>
+                            <td id="D" onclick="assignControls(id)"></td>
+                        </tr>
+                        <tr>
+                            <td id="7" onclick="assignControls(id)"></td>
+                            <td id="8" onclick="assignControls(id)"></td>
+                            <td id="9" onclick="assignControls(id)"></td>
+                            <td id="E" onclick="assignControls(id)"></td>
+                        </tr>
+                        <tr>
+                            <td id="A" onclick="assignControls(id)"></td>
+                            <td id="0" onclick="assignControls(id)"></td>
+                            <td id="B" onclick="assignControls(id)"></td>
+                            <td id="F" onclick="assignControls(id)"></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div id="fileDropBox" class="boxBot">
+                <div id="dropZone" ondrop="readFile(event)" ondragover="preventDefault(event)" ondragenter="highlight(true)" ondragleave="highlight(false)">
+                    <p style="font-size: 4rem;">Load program</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+
+    <script>
+        const socket = new WebSocket("ws://localhost:8080/ws");
+        socket.binaryType = 'arraybuffer';
+
+        const audioContext = new window.AudioContext();
+        const displayBox = document.getElementById("displayBox");
+        const widthToEmulate = 64;
+        const heightToEmulate = 32;
+        const debuggerInput = document.getElementById("input");
+        const debuggerOutput = document.getElementById("output");
+        const typeProgram = 0;
+        const typeInput = 1;
+        const typeCommand = 2;
+        const keysPressed = {};
+        const programPackages = [];
+        const keyboard = new Map([
+            ["1", "1"], ["2", "2"], ["3", "3"], ["4", "C"],
+            ["Q", "4"], ["W", "5"], ["E", "6"], ["R", "D"],
+            ["A", "7"], ["S", "8"], ["D", "9"], ["F", "E"], 
+            ["Z", "A"], ["X", "0"], ["C", "B"], ["V", "F"]
+        ]);
+        var oscillator;
+        var currentPicture = new Array(widthToEmulate * heightToEmulate).fill(false);
+        var currentProgramId = 0;
+        var timeOutId = undefined;
+        var prevCommand;
+
+        function loadCanvas(displayArray){
+            
+            let canvas = displayBox.querySelector("canvas")
+            if(!canvas)
+            {
+                canvas = document.createElement("canvas");
+                displayBox.appendChild(canvas);
+                canvas.width = displayBox.offsetWidth;
+                canvas.height = displayBox.offsetWidth / 2;
+            }
+            let pixelSize = canvas.width / widthToEmulate;
+            let context = canvas.getContext("2d");
+
+            context.clearRect(0, 0, canvas.width, canvas.height);
+            displayArray.forEach((byte, index) => {
+                    for (let i = 0; i < 8; i++){
+                        
+                        if(byte & (0x80 >> i)) context.fillStyle = "black";
+                        else context.fillStyle = "white";
+                        context.fillRect(((index * 8 + i) % widthToEmulate) * pixelSize, Math.floor((index * 8 + i) / widthToEmulate) * pixelSize, pixelSize, pixelSize);
+                    }
+                });
+            
+                currentPicture = displayArray;
+        }
+
+        function playSound(play){
+            if(play)
+            {
+                if(!oscillator)
+                {
+                    oscillator = audioContext.createOscillator();
+                    oscillator.connect(audioContext.destination);
+                    oscillator.type = "square";
+                    oscillator.frequency.value = 100;
+                    oscillator.start();
+                }
+            }
+            else{
+                if(oscillator)
+                {
+                    oscillator.stop();
+                    oscillator = undefined;
+                }
+            }
+        }
+        function freeze(doFreeze, message = ""){
+            document.getElementById("freezeMessage").innerText = message;
+            if(doFreeze) document.getElementById("freeze").style.display = "flex";
+            else document.getElementById("freeze").style.display = "none";
+        }
+
+        function assignControls(hexKey){
+            freeze(true, "Press a key to assign it");
+            document.addEventListener("keydown", function(event){
+                let oldKey = document.getElementById(hexKey).innerText;
+                let pressedKey = event.key.toUpperCase();
+                let existingKeyHex = keyboard.get(pressedKey);
+
+                if(keyboard.delete(pressedKey) && existingKeyHex !== hexKey) {
+                    keyboard.set("", existingKeyHex);
+                }
+                keyboard.delete(oldKey);
+                keyboard.set(pressedKey, hexKey);
+                
+                setControlsTableValues();
+                freeze(false);
+            }, {once: true});
+        }
+
+        function setControlsTableValues(){
+            keyboard.forEach((value, key) =>{
+                document.getElementById(value).innerText = key;
+            })
+        }
+
+        function readFile(event)
+        {
+            event.preventDefault();
+            highlight(false);
+            let files = event.dataTransfer.files;
+            if(files.length > 1){
+                if(!confirm("You've dropped more than one file.\nOnly the first file will be uploaded.")){
+                    freeze(false);
+                    return;
+                }
+            }
+            let file = files[0];
+            if(!file.name.endsWith(".ch8")){
+                alert("File was not a .ch8 file.\nUpload cancelled")
+                freeze(false);
+                return;
+            }
+            var reader = new FileReader();
+            reader.readAsArrayBuffer(file);
+            reader.onload = function (event){
+                freeze(true, "Uploading, please wait...");
+                let message = event.target.result;
+                if(message.byteLength <= 4096 - 512)
+                {
+                    send(typeProgram, message)
+                }
+                else{
+                    alert("File too large. Chip8 only has an available memory of 3584 bytes");
+                    freeze(false);
+                }
+            }
+        }
+
+        function upload(file, freezeMessage = "Uploading, please wait..."){
+            freeze(true, freezeMessage);
+            var reader = new FileReader();
+            reader.readAsArrayBuffer(file);
+            reader.onload = function (event){
+                let byteArray = event.target.result
+            };
+        }
+        function preventDefault(event){
+            event.preventDefault();
+        }
+        function highlight(doHightligt){
+            if(doHightligt){
+                document.getElementById("dropZone").style.borderColor = "blue";
+            }
+            else{
+                document.getElementById("dropZone").style.borderColor = "black";
+            }
+        }
+
+        function keyUp(event){
+            let key = event.key.toUpperCase();
+            if(keyboard.has(key)){
+                keysPressed[key] = false;
+                send(typeInput, new Uint8Array([parseInt(keyboard.get(key), 16), false]).buffer)
+            }
+        }
+        function keyDown(event){
+            let key = event.key.toUpperCase();
+            console.log(new Uint8Array([parseInt(keyboard.get(key), 16), false]));
+            if(keyboard.has(key) && !keysPressed[key]){
+                keysPressed[key] = true;
+                send(typeInput, new Uint8Array([parseInt(keyboard.get(key), 16), true]).buffer)
+            }
+        }
+
+        function enterCommand(event){
+            if(event.key === "Enter"){
+                let command = debuggerInput.value;
+                debuggerInput.value = "";
+                writeToConsole(command)
+                prevCommand = command;
+
+                let commandAsBuffer = new TextEncoder().encode(command).buffer;
+                send(typeCommand, commandAsBuffer);
+            }
+        }
+        function repeatCommand(event){
+            if(event.key === "ArrowUp")
+            {
+                debuggerInput.value = prevCommand;
+            }
+        }
+        function writeToConsole(command)
+        {
+            debuggerOutput.innerHTML += "<p>" + command + "</p>";
+            debuggerOutput.scrollTop = debuggerOutput.scrollHeight;
+        }
+
+        function send(type, data)
+        {
+            let dataView = new Uint8Array(data);
+            let message = new ArrayBuffer(data.byteLength + 1);
+            let messageView = new Uint8Array(message);
+            
+            messageView.set(dataView, 1);
+            messageView[0] = type;
+            socket.send(message);
+        }
+
+        socket.onmessage = (event) => {
+            let data = new Uint8Array(event.data);
+            let type = data[0];
+            let gameState = 0;
+            let debug = 1;
+
+            switch(type){
+                case gameState:
+                    console.log(data.slice(2))
+                    loadCanvas(data.slice(2));
+                    playSound(data[1]);
+                    break;
+                case debug:
+                    freeze(false)
+                    writeToConsole(new TextDecoder().decode(data.slice(1)));
+                    break;
+            };
+        }
+
+        debuggerInput.addEventListener("keyup", enterCommand);
+        debuggerInput.addEventListener("keyup", repeatCommand);
+        displayBox.addEventListener("keydown", keyDown);
+        displayBox.addEventListener("keyup", keyUp);
+
+        setControlsTableValues();
+        loadCanvas(currentPicture);
+
+        class Program{
+            constructor(id, program, part, whole, final){
+                this.ProgramId = id,
+                this.intArray = program,
+                this.part = part,
+                this.whole = whole,
+                this.final = final
+            }
+        }
+    </script>
+</body>
+</html>
