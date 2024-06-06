@@ -1,0 +1,3 @@
+﻿<Project>
+  <Import Project="..\build\Chip8EmuServer.props" />
+</Project>

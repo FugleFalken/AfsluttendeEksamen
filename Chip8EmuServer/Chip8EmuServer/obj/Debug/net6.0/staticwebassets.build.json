@@ -1,0 +1,11 @@
+{
+  "Version": 1,
+  "Hash": "H28Z56iY2WTXqPaaCv4/szTRpDCvcUxlPAhX+rvDA9I=",
+  "Source": "Chip8EmuServer",
+  "BasePath": "_content/Chip8EmuServer",
+  "Mode": "Default",
+  "ManifestType": "Build",
+  "ReferencedProjectsConfiguration": [],
+  "DiscoveryPatterns": [],
+  "Assets": []
+}
